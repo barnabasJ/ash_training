@@ -10,7 +10,8 @@ To get started, you will want to ensure that you have
 - a recent version of Postgresql
 - a code editor
 
-These instructions are for mac & linux. If you are on windows, we will figure it out in person. It is absolutely not a problem if you are.
+These instructions are for mac & linux. If you are on windows, we will figure it
+out in person. It is absolutely not a problem if you are.
 
 ### Terminal
 
@@ -32,9 +33,11 @@ If you already have these installed, you can skip the rest of this document.
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
 
-#### Installing `asdf`
+### Installing `asdf`
 
-If you already have `asdf` installed, you can skip this section. If you don't know your shell, use `echo $SHELL` in your terminal. If you use a different shell, we'll figure it out in person.
+If you already have `asdf` installed, you can skip this section. If you don't
+know your shell, use `echo $SHELL` in your terminal. If you use a different
+shell, we'll figure it out in person.
 
 ```bash
 brew install asdf
@@ -48,7 +51,7 @@ echo -e "\n. \"$(brew --prefix asdf)/libexec/asdf.sh\"" >> ~/.zshrc
 echo -e "\n. \"$(brew --prefix asdf)/etc/bash_completion.d/asdf.bash\"" >> ~/.zshrc
 ```
 
-#### Installing Elixir/Erlang with asdf
+### Installing Elixir/Erlang with asdf
 
 ```bash
 # in the project root directory

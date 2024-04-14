@@ -111,7 +111,7 @@ defmodule TwitterWeb.TweetLive.Index do
   #   stream_insert(
   #     socket,
   #     :tweets,
-  #     Ash.get!(Twitter.Tweets.Tweet, id, actor: socket.assigns.current_user, load: @tweet_loads)
+  #     Twitter.Tweets.get_tweet!(id, actor: socket.assigns.current_user, load: @tweet_loads)
   #   )
   # end
 end

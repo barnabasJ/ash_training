@@ -6,7 +6,7 @@ defmodule Twitter.Accounts.User do
     domain: Twitter.Accounts
 
   admin do
-    actor? true
+    actor?(true)
   end
 
   postgres do

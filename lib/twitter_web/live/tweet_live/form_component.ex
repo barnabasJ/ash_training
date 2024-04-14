@@ -10,7 +10,13 @@ defmodule TwitterWeb.TweetLive.FormComponent do
         <:subtitle>Use this form to manage tweet records in your database.</:subtitle>
       </.header>
 
-      <.simple_form for={%{}} as={:tweet} id="tweet-form" phx-target={@myself} phx-submit="save">
+      <.simple_form
+        for={%{}}
+        as={:tweet}
+        id="tweet-form"
+        phx-target={@myself}
+        phx-submit="save"
+      >
         <:actions>
           <.button phx-disable-with="Saving...">Save Tweet</.button>
         </:actions>

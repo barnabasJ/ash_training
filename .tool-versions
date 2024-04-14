@@ -1,2 +1,7 @@
+<<<<<<< HEAD
 erlang 27.2
 elixir 1.18.2
+=======
+erlang 26.2.4
+elixir 1.16.2
+>>>>>>> 3770635 (start at a base application)
