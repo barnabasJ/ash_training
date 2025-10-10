@@ -89,3 +89,6 @@ config :phoenix_live_view, :debug_heex_annotations, true
 
 # Disable swoosh api client as it is only required for production adapters.
 config :swoosh, :api_client, false
+
+# Configure OpenAI API key for AshAi
+config :langchain, :openai_key, System.get_env("OPENAI_API_KEY")
