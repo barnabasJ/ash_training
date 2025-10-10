@@ -33,18 +33,29 @@ Before starting, you'll need:
 
 ### 1. Install AshAi Dependencies
 
-Add the following dependencies to your `mix.exs` file in the `deps` function:
+Install AshAi using igniter `mix igniter.install ash_ai`. Or do it manually by
+adding the following dependency to your `mix.exs` file in the `deps` function:
 
 ```elixir
 {:ash_ai, "~> 0.2"},
-{:ash_oban, "~> 0.2"},
-{:langchain, "~> 0.3"}
 ```
 
 Then run:
 
 ```bash
 mix deps.get
+```
+
+and add the extension to your formatter configuration in `.formatter.exs`:
+
+```elixir
+[
+  import_deps: [
+    :ash_ai
+    ...
+  ],
+  ...
+]
 ```
 
 ### 2. Configure OpenAI API Key
