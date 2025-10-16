@@ -1,5 +1,6 @@
 defmodule TwitterWeb.Router do
   use TwitterWeb, :router
+  import Oban.Web.Router
   use AshAuthentication.Phoenix.Router
 
   pipeline :browser do
@@ -95,6 +96,12 @@ defmodule TwitterWeb.Router do
 
       live_dashboard "/dashboard", metrics: TwitterWeb.Telemetry
       forward "/mailbox", Plug.Swoosh.MailboxPreview
+    end
+
+    scope "/" do
+      pipe_through :browser
+
+      oban_dashboard("/oban")
     end
   end
 end
