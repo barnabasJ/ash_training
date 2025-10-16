@@ -1,5 +1,6 @@
 import Config
 
+config :phoenix_live_view, debug_attributes: true
 config :ash, :policies, show_policy_breakdowns?: true
 
 # Configure your database

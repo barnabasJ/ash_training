@@ -10,7 +10,9 @@ defmodule Twitter.MixProject do
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
-      deps: deps()
+      deps: deps(),
+      listeners: [Phoenix.CodeReloader],
+      compilers: [:phoenix_live_view] ++ Mix.compilers()
     ]
   end
 
@@ -52,7 +54,7 @@ defmodule Twitter.MixProject do
       {:redoc_ui_plug, "~> 0.2"},
       {:ecto_dev_logger, "~> 0.10"},
       # Phoenix Default Dependencies
-      {:phoenix, "~> 1.7.11"},
+      {:phoenix, "~> 1.8"},
       {:phoenix_ecto, "~> 4.4"},
       {:ecto_sql, "~> 3.10"},
       {:postgrex, ">= 0.0.0"},
@@ -61,8 +63,9 @@ defmodule Twitter.MixProject do
       {:igniter, "~> 0.6", only: :dev},
       {:phoenix_live_view, "~> 1.0"},
       {:floki, ">= 0.30.0", only: :test},
+      {:lazy_html, ">= 0.0.0", only: :test},
       {:phoenix_live_dashboard, "~> 0.8.3"},
-      {:esbuild, "~> 0.8", runtime: Mix.env() == :dev},
+      {:esbuild, "~> 0.10", runtime: Mix.env() == :dev},
       {:tailwind, "~> 0.2", runtime: Mix.env() == :dev},
       {:heroicons,
        github: "tailwindlabs/heroicons",
