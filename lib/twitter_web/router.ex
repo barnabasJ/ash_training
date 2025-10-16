@@ -48,7 +48,7 @@ defmodule TwitterWeb.Router do
     sign_in_route(register_path: "/register", reset_path: "/reset")
 
     sign_out_route AuthController
-    auth_routes_for Twitter.Accounts.User, to: AuthController
+    auth_routes AuthController, Twitter.Accounts.User
     reset_route []
   end
 

@@ -33,6 +33,7 @@ defmodule Twitter.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
+      {:oban_web, "~> 2.0"},
       {:mdex, "~> 0.7"},
       {:ash_oban, "~> 0.4"},
       # Ash
@@ -40,7 +41,7 @@ defmodule Twitter.MixProject do
       {:ash_ai, "~> 0.2"},
       {:ash_postgres, "~> 2.0"},
       {:ash_phoenix, "~> 2.0"},
-      {:ash_admin, "~> 0.11"},
+      {:ash_admin, "~> 0.13"},
       {:ash_authentication, "~> 4.0"},
       {:ash_authentication_phoenix, "~> 2.0"},
       {:ash_graphql, "~> 1.0"},
@@ -56,7 +57,8 @@ defmodule Twitter.MixProject do
       {:postgrex, ">= 0.0.0"},
       {:phoenix_html, "~> 4.0"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
-      {:phoenix_live_view, "~> 0.20.2"},
+      {:igniter, "~> 0.6", only: :dev},
+      {:phoenix_live_view, "~> 1.0"},
       {:floki, ">= 0.30.0", only: :test},
       {:phoenix_live_dashboard, "~> 0.8.3"},
       {:esbuild, "~> 0.8", runtime: Mix.env() == :dev},
