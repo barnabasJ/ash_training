@@ -45,7 +45,9 @@ defmodule Twitter.Tweets.Tweet do
   attributes do
     uuid_primary_key :id
 
-    attribute :text, :string
+    attribute :text, :string do
+      public? true
+    end
 
     timestamps()
   end
@@ -56,10 +58,13 @@ defmodule Twitter.Tweets.Tweet do
   end
 
   aggregates do
-    count :like_count, :likes
+    count :like_count, :likes do
+      public? true
+    end
 
     first :user_email, :user, :email do
       authorize? false
+      public? true
     end
   end
 
