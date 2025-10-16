@@ -33,6 +33,8 @@ defmodule Twitter.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
+      {:mdex, "~> 0.7"},
+      {:ash_oban, "~> 0.4"},
       # Ash
       {:ash, "~> 3.0"},
       {:ash_ai, "~> 0.2"},

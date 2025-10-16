@@ -35,6 +35,8 @@ defmodule TwitterWeb.Router do
 
     ash_authentication_live_session :authentication_required,
       on_mount: {TwitterWeb.LiveUserAuth, :live_user_required} do
+      live "/chat", ChatLive
+      live "/chat/:conversation_id", ChatLive
       live "/", TweetLive.Index, :index
       live "/tweets/new", TweetLive.Index, :new
       live "/tweets/:id/edit", TweetLive.Index, :edit
