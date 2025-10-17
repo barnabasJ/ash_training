@@ -37,3 +37,7 @@ npm-debug.log
 
 # env files
 .envrc
+
+# language server
+.elixir_ls/
+.expert/
