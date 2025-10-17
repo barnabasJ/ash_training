@@ -66,7 +66,7 @@ defmodule TwitterWeb.ChatLive do
                   </div>
                 </div>
                 <div class="chat-bubble">
-                  <%= to_markdown(message.text) %>
+                  {to_markdown(message.text)}
                 </div>
               </div>
             <% end %>
