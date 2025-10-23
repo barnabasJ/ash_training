@@ -26,37 +26,13 @@ We'll use `mix ash_ai.gen.chat` to generate a complete chat feature with:
 
 Before starting, you'll need:
 
-- An OpenAI API key (sign up at https://platform.openai.com)
-- Tailwind CSS and DaisyUI installed (already included in this project)
+- An OpenAI API key (https://platform.openai.com/api-keys)
 
 ## Steps
 
 ### 1. Install AshAi Dependencies
 
-Install AshAi using igniter `mix igniter.install ash_ai`. Or do it manually by
-adding the following dependency to your `mix.exs` file in the `deps` function:
-
-```elixir
-{:ash_ai, "~> 0.2"},
-```
-
-Then run:
-
-```bash
-mix deps.get
-```
-
-and add the extension to your formatter configuration in `.formatter.exs`:
-
-```elixir
-[
-  import_deps: [
-    :ash_ai
-    ...
-  ],
-  ...
-]
-```
+Install AshAi using igniter `mix igniter.install ash_ai`.
 
 ### 2. Configure OpenAI API Key
 
@@ -87,16 +63,11 @@ Run the chat generator:
 mix ash_ai.gen.chat --live
 ```
 
-This command will prompt you to select:
-
-- Your user resource: Select `Twitter.Accounts.User`
-- Whether to generate with LiveView: Choose `yes`
-
 The generator will create:
 
-- `Twitter.Ai` domain module
-- `Twitter.Ai.Conversation` resource (for storing chat conversations)
-- `Twitter.Ai.Message` resource (for storing individual messages)
+- `Twitter.Chat` domain module
+- `Twitter.Chat.Conversation` resource (for storing chat conversations)
+- `Twitter.Chat.Message` resource (for storing individual messages)
 - LiveView components for the chat interface
 - Routes for accessing the chat
 
@@ -105,30 +76,7 @@ The generator will create:
 The generator creates new resources, so we need to create and run migrations:
 
 ```bash
-mix ash.codegen add_ai_chat
 mix ash.migrate
-```
-
-### 5. Configure AshOban
-
-AshAi uses Oban to handle asynchronous message processing. We need to set up
-Oban in our application.
-
-Add Oban configuration to `config/config.exs`:
-
-```elixir
-config :twitter, Oban,
-  repo: Twitter.Repo,
-  queues: [default: 10, ai: 5],
-  plugins: [Oban.Plugins.Pruner]
-```
-
-Then update your `Twitter.Application` module in `lib/twitter/application.ex` to
-include Oban in the supervision tree:
-
-```elixir
-# Add this to the children list in the start/2 function
-{Oban, Application.fetch_env!(:twitter, Oban)}
 ```
 
 ### 6. Define Tweet Tools
@@ -148,46 +96,18 @@ defmodule Twitter.Tweets do
       description "Retrieve the feed of tweets, sorted by most recent first"
     end
 
-    tool :get_tweet, Twitter.Tweets.Tweet, :read do
-      description "Get a specific tweet by ID"
-      argument :id, :uuid, allow_nil?: false
+    tool :read_tweet, Twitter.Tweets.Tweet, :read do
+      description "Retrieve a list of tweets, also supports filtering, sorting, and more"
     end
 
     tool :create_tweet, Twitter.Tweets.Tweet, :create do
       description "Create a new tweet with text content"
-      argument :text, :string, allow_nil?: false
     end
   end
 end
 ```
 
-### 7. Make Tweet Attributes Public
-
-For the AI to read tweet data through tools, we need to make relevant attributes
-public. In `lib/twitter/tweets/tweet.ex`, update the attributes:
-
-```elixir
-attribute :text, :string do
-  allow_nil? false
-  public? true
-end
-
-attribute :id, :uuid do
-  primary_key? true
-  default &Ash.UUID.generate/0
-  public? true
-end
-```
-
-Also make the `user_email` calculation public:
-
-```elixir
-calculate :user_email, :string, expr(user.email) do
-  public? true
-end
-```
-
-### 8. Test the Chat Interface
+### 7. Test the Chat Interface
 
 Start your Phoenix server:
 
@@ -231,7 +151,6 @@ to the `tools` block:
 ```elixir
 tool :like_tweet, Twitter.Tweets.Like, :like do
   description "Like a tweet. The current user will be marked as liking the tweet."
-  argument :tweet_id, :uuid, allow_nil?: false
 end
 ```
 
@@ -240,20 +159,9 @@ Now you can ask the AI: "Like the tweet with ID [some-uuid]"
 ## Try on your own
 
 - Add a tool for unliking tweets using the `:unlike` action
+  - you should set `identity` to false
 
-- Create a tool that allows the AI to search for tweets containing specific text
-  (you'll need to add a custom read action with a filter)
-
-- Add descriptions to your tools to help the AI understand when to use them
-
-- Experiment with different AI models by configuring the LLM provider in your
-  conversation resource
-
-- Add a tool that exposes the `:like_count` aggregate, so the AI can tell you
-  which tweets are most popular
-
-- Configure the chat to use different system prompts by modifying the generated
-  `Conversation` resource
+# TODO: add more try on your own items
 
 ## Verification
 

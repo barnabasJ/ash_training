@@ -53,8 +53,8 @@ defmodule Twitter.Tweets.Tweet do
   end
 
   calculations do
-    calculate :text_length, :integer, expr(string_length(text))
-    calculate :liked_by_me, :boolean, expr(exists(likes, user_id == ^actor(:id)))
+    calculate :text_length, :integer, expr(string_length(text)), public?: true
+    calculate :liked_by_me, :boolean, expr(exists(likes, user_id == ^actor(:id))), public?: true
   end
 
   aggregates do

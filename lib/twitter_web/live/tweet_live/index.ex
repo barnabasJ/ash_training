@@ -39,6 +39,17 @@ defmodule TwitterWeb.TweetLive.Index do
           {tweet.user_email}
         </:col>
         <:action :let={{_id, tweet}}>
+          <%= if tweet.liked_by_me do %>
+            <button phx-click="unlike" phx-value-id={tweet.id}>
+              <.icon name="hero-heart-solid" class="text-red-600" />
+            </button>
+          <% else %>
+            <button phx-click="like" phx-value-id={tweet.id}>
+              <.icon name="hero-heart" />
+            </button>
+          <% end %>
+        </:action>
+        <:action :let={{_id, tweet}}>
           <div class="sr-only">
             <.link navigate={~p"/tweets/#{tweet}"}>Show</.link>
           </div>
@@ -59,6 +70,11 @@ defmodule TwitterWeb.TweetLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
+    if connected?(socket) do
+      TwitterWeb.Endpoint.subscribe("tweet:liked")
+      TwitterWeb.Endpoint.subscribe("tweet:unliked")
+    end
+
     {:ok,
      socket
      |> stream(
@@ -100,6 +116,20 @@ defmodule TwitterWeb.TweetLive.Index do
     {:noreply, stream_insert(socket, :tweets, tweet)}
   end
 
+  def handle_info(
+        %{
+          topic: "tweet:" <> _tenant_updated_or_created
+        },
+        socket
+      ) do
+    {:noreply,
+     socket
+     |> stream(
+       :tweets,
+       Twitter.Tweets.feed!(actor: socket.assigns.current_user, load: @tweet_loads)
+     )}
+  end
+
   @impl true
   def handle_event("delete", %{"id" => id}, socket) do
     Twitter.Tweets.Tweet
@@ -128,11 +158,13 @@ defmodule TwitterWeb.TweetLive.Index do
     {:noreply, refetch_tweet(socket, tweet_id)}
   end
 
-  defp refetch_tweet(socket, id) do
-    stream_insert(
-      socket,
-      :tweets,
-      Ash.get!(Twitter.Tweets.Tweet, id, actor: socket.assigns.current_user, load: @tweet_loads)
-    )
+  defp refetch_tweet(socket, _id) do
+    # TODO: investigate why stream_insert with a single record doesn't work here
+    # Ash.get! seems to have a bug 
+    socket
+     |> stream(
+       :tweets,
+       Twitter.Tweets.feed!(actor: socket.assigns.current_user, load: @tweet_loads)
+     )
   end
 end

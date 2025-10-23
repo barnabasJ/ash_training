@@ -20,9 +20,25 @@ defmodule Twitter.Tweets do
   end
 
   tools do
-    tool :read_feed, Twitter.Tweets.Tweet, :feed
-    tool :get_tweet, Twitter.Tweets.Tweet, :read
-    tool :create_tweet, Twitter.Tweets.Tweet, :create
-    tool :like_tweet, Twitter.Tweets.Like, :like
+    tool :read_feed, Twitter.Tweets.Tweet, :feed do
+      description "Retrieve the feed of tweets, sorted by most recent first"
+    end
+
+    tool :read_tweet, Twitter.Tweets.Tweet, :read do
+      description "Retrieve a list of tweets, also supports filtering, sorting, and more"
+    end
+
+    tool :create_tweet, Twitter.Tweets.Tweet, :create do
+      description "Create a new tweet with text content"
+    end
+
+    tool :like_tweet, Twitter.Tweets.Like, :like do
+      description "Like a tweet. The current user will be marked as liking the tweet."
+    end
+
+    tool :unlike_tweet, Twitter.Tweets.Like, :unlike do
+      description "Unlike a tweet. The current user will be unmarked as liking the tweet."
+      identity false
+    end
   end
 end

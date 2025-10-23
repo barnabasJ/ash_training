@@ -1,10 +1,23 @@
 defmodule Twitter.Tweets.Like do
-  use Ash.Resource, otp_app: :twitter, domain: Twitter.Tweets, data_layer: AshPostgres.DataLayer
+  use Ash.Resource,
+    otp_app: :twitter,
+    domain: Twitter.Tweets,
+    data_layer: AshPostgres.DataLayer,
+    notifiers: [Ash.Notifier.PubSub]
 
   attributes do
     uuid_primary_key :id
 
     timestamps()
+  end
+
+  pub_sub do
+    module TwitterWeb.Endpoint
+    prefix "tweet"
+
+    publish_all :create, "liked"
+
+    publish_all :destroy, "unliked"
   end
 
   actions do
