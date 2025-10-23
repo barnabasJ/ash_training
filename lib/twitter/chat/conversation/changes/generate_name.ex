@@ -48,7 +48,11 @@ defmodule Twitter.Chat.Conversation.Changes.GenerateName do
          %LangChain.Chains.LLMChain{
            last_message: %{content: content}
          }} ->
-          Ash.Changeset.force_change_attribute(changeset, :title, content)
+          Ash.Changeset.force_change_attribute(
+            changeset,
+            :title,
+            LangChain.Message.ContentPart.content_to_string(content)
+          )
 
         {:error, _, error} ->
           {:error, error}
