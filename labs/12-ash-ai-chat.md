@@ -1,4 +1,4 @@
-# Lab 11 - AshAi Chat Setup & Tools
+# Lab 12 - AshAi Chat Setup & Tools
 
 ## Relevant Documentation
 
@@ -27,14 +27,11 @@ We'll use `mix ash_ai.gen.chat` to generate a complete chat feature with:
 Before starting, you'll need:
 
 - An OpenAI API key (https://platform.openai.com/api-keys)
+- AshAi installed (completed in Lab 11)
 
 ## Steps
 
-### 1. Install AshAi Dependencies
-
-Install AshAi using igniter `mix igniter.install ash_ai`.
-
-### 2. Configure OpenAI API Key
+### 1. Configure OpenAI API Key
 
 Add your OpenAI API key to your configuration. In `config/dev.exs` and
 `config/runtime.exs`, add:
@@ -55,7 +52,7 @@ Set the environment variable in your terminal:
 export OPENAI_API_KEY="your-api-key-here"
 ```
 
-### 3. Generate Chat Resources
+### 2. Generate Chat Resources
 
 Run the chat generator:
 
@@ -71,7 +68,7 @@ The generator will create:
 - LiveView components for the chat interface
 - Routes for accessing the chat
 
-### 4. Run Migrations
+### 3. Run Migrations
 
 The generator creates new resources, so we need to create and run migrations:
 
@@ -79,7 +76,7 @@ The generator creates new resources, so we need to create and run migrations:
 mix ash.migrate
 ```
 
-### 6. Define Tweet Tools
+### 4. Define Tweet Tools
 
 Now we'll expose Tweet actions as tools that the AI can call. Open
 `lib/twitter/tweets.ex` and add a `tools` block to the domain:
@@ -87,7 +84,7 @@ Now we'll expose Tweet actions as tools that the AI can call. Open
 ```elixir
 defmodule Twitter.Tweets do
   use Ash.Domain,
-    extensions: [AshAi.Domain]
+    extensions: [AshAi]
 
   # ... existing code ...
 
@@ -107,7 +104,7 @@ defmodule Twitter.Tweets do
 end
 ```
 
-### 7. Test the Chat Interface
+### 5. Test the Chat Interface
 
 Start your Phoenix server:
 
@@ -126,7 +123,7 @@ Try asking the AI:
 
 Watch the console to see the AI making tool calls to your Tweet actions.
 
-### 9. Configure Tool Calling Behavior
+### 6. Configure Tool Calling Behavior
 
 You can customize how tools behave by adding metadata. Update a tool in
 `lib/twitter/tweets.ex`:
@@ -143,7 +140,7 @@ tool :read_feed, Twitter.Tweets.Tweet, :feed do
 end
 ```
 
-### 10. Add a Like Tool
+### 7. Add a Like Tool
 
 Let's add the ability for the AI to like tweets on behalf of the user. Add this
 to the `tools` block:

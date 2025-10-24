@@ -38,11 +38,13 @@ config :spark, :formatter,
   "Ash.Resource": []
 
 config :mime, :types, %{
-  "application/vnd.api+json" => ["json"]
+  "application/vnd.api+json" => ["json"],
+  "text/event-stream" => ["event-stream"]
 }
 
 config :mime, :extensions, %{
-  "json" => "application/vnd.api+json"
+  "json" => "application/vnd.api+json",
+  "event-stream" => "text/event-stream"
 }
 
 # Configures the mailer
