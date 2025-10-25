@@ -14,6 +14,7 @@ defmodule Twitter.Tweets.Tweet do
         Tweet: #{tweet.text}
         """
       end
+
       used_attributes [:text]
     end
 
@@ -47,6 +48,81 @@ defmodule Twitter.Tweets.Tweet do
       prepare build(sort: [inserted_at: :desc])
     end
 
+    read :semantic_search do
+      argument :query, :string do
+        allow_nil? false
+        description "The search query to find semantically similar tweets"
+      end
+
+      prepare fn query, _context ->
+        search_text = Ash.Query.get_argument(query, :query)
+
+        # Generate embedding for the search query
+        case Twitter.Ai.OpenAiEmbeddingModel.generate([search_text], []) do
+          {:ok, [search_vector]} ->
+            query
+            |> Ash.Query.sort(
+              {calc(vector_cosine_distance(full_text_vector, ^search_vector), type: :float), :asc}
+            )
+            |> Ash.Query.limit(10)
+
+          {:error, error} ->
+            Ash.Query.add_error(query, error)
+        end
+      end
+    end
+
+    action :ask, :string do
+      argument :question, :string do
+        allow_nil? false
+        description "The question to ask about tweets"
+      end
+
+      argument :limit, :integer do
+        default 3
+        description "Number of context tweets to retrieve"
+      end
+
+      argument :context, :string do
+        public? false
+        allow_nil? true
+      end
+
+      prepare fn input, _context ->
+        question = input.arguments.question
+        limit = input.arguments.limit
+
+        context_tweets =
+          Twitter.Tweets.Tweet
+          |> Ash.Query.for_read(:semantic_search, %{query: question})
+          |> Ash.Query.limit(limit)
+          |> Ash.read!()
+          |> Enum.map(fn tweet ->
+            "- \"#{tweet.text}\""
+          end)
+
+        Ash.ActionInput.set_argument(input, :context, Enum.join(context_tweets, "\n"))
+      end
+
+      run prompt(
+            LangChain.ChatModels.ChatOpenAI.new!(%{model: "gpt-4o-mini"}),
+            prompt: """
+            You are a helpful assistant answering questions about tweets.
+
+            Here are some relevant tweets from our database:
+
+            <%= @input.arguments.context %>
+
+            User's question: <%= @input.arguments.question %>
+
+            Please provide a helpful, concise answer based on the tweets above.
+            If the tweets don't contain relevant information, acknowledge that
+            and provide a general response.
+            """,
+            verbose?: true
+          )
+    end
+
     create :create do
       accept [:text]
 
@@ -72,7 +148,7 @@ defmodule Twitter.Tweets.Tweet do
       authorize_if always()
     end
 
-    policy action(:create) do
+    policy action([:create, :ask]) do
       authorize_if always()
     end
 
