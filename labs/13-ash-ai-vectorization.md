@@ -315,17 +315,18 @@ actions do
       search_text = Ash.Query.get_argument(query, :query)
 
       # Get embedding for the search query using generate/2 (not embed/1)
-      {:ok, [embedding]} = Twitter.Ai.OpenAiEmbeddingModel.generate([search_text], [])
+      case Twitter.Ai.OpenAiEmbeddingModel.generate([search_text], []) do
+        {:ok, [search_vector]} ->
+          query
+          |> Ash.Query.sort(
+            {calc(vector_cosine_distance(full_text_vector, ^search_vector), type: :float),
+             :asc}
+          )
+          |> Ash.Query.limit(10)
 
-      # Sort by vector similarity
-      query
-      |> Ash.Query.sort(
-        vector_cosine_distance: {
-          :full_text_vector,
-          embedding
-        }
-      )
-      |> Ash.Query.limit(10)
+        {:error, error} ->
+          Ash.Query.add_error(query, error)
+      end
     end
   end
 end
@@ -371,139 +372,113 @@ matches.
 
 ### 10. Create a RAG-Enabled Prompt Action
 
-Now we'll create a generic action that uses vectorization to retrieve relevant
-tweets and uses them as context for an LLM. Create a new resource for AI
-queries:
+Now we'll create a generic action on the Tweet resource that uses vectorization
+to retrieve relevant tweets and uses them as context for an LLM.
 
-```bash
-mix ash.gen.resource Twitter.Ai.Query \
-  --default-actions read,create
-```
-
-Open `lib/twitter/ai/query.ex` and configure it as a prompt-backed action:
+Open `lib/twitter/tweets/tweet.ex` and add this action after `:semantic_search`:
 
 ```elixir
-defmodule Twitter.Ai.Query do
-  use Ash.Resource,
-    domain: Twitter.Ai,
-    extensions: [AshAi.Resource]
-
-  attributes do
-    uuid_primary_key :id
-
-    attribute :question, :string, allow_nil?: false, public?: true
-    attribute :answer, :string, allow_nil?: false, public?: true
-    attribute :context_tweets, {:array, :string}, public?: true
-
-    timestamps()
+action :ask, :string do
+  argument :question, :string do
+    allow_nil? false
+    description "The question to ask about tweets"
   end
 
-  actions do
-    defaults [:read]
+  argument :limit, :integer do
+    default 3
+    description "Number of context tweets to retrieve"
+  end
 
-    create :ask do
-      accept [:question]
+  argument :context, :string do
+    public? false
+    allow_nil? true
+  end
 
-      # Use a before_action hook to fetch context
-      change before_action(fn changeset, _context ->
-        question = Ash.Changeset.get_attribute(changeset, :question)
+  prepare fn input, _context ->
+    question = input.arguments.question
+    limit = input.arguments.limit
 
-        # Get relevant tweets using semantic search
-        context_tweets =
-          Twitter.Tweets.Tweet
-          |> Ash.Query.for_read(:semantic_search, %{query: question})
-          |> Ash.Query.limit(3)
-          |> Ash.read!()
-
-        # Store tweet texts for context
-        tweet_texts = Enum.map(context_tweets, & &1.text)
-
-        changeset
-        |> Ash.Changeset.change_attribute(:context_tweets, tweet_texts)
+    # Retrieve relevant tweets using semantic search
+    context_tweets =
+      Twitter.Tweets.Tweet
+      |> Ash.Query.for_read(:semantic_search, %{query: question})
+      |> Ash.Query.limit(limit)
+      |> Ash.read!()
+      |> Enum.map(fn tweet ->
+        "- \"#{tweet.text}\""
       end)
 
-      # Use the LLM to generate an answer
-      change AshAi.Change.PromptCompletion.new(
-        prompt: fn query ->
-          context = Enum.join(query.context_tweets, "\n- ")
+    Ash.ActionInput.set_argument(input, :context, Enum.join(context_tweets, "\n"))
+  end
 
-          """
-          You are a helpful assistant answering questions about tweets.
+  run prompt(
+        LangChain.ChatModels.ChatOpenAI.new!(%{model: "gpt-4o-mini"}),
+        prompt: """
+        You are a helpful assistant answering questions about tweets.
 
-          Here are some relevant tweets for context:
-          - #{context}
+        Here are some relevant tweets from our database:
 
-          Question: #{query.question}
+        <%= @input.arguments.context %>
 
-          Provide a helpful answer based on the tweets above.
-          """
-        end,
-        output_attribute: :answer,
-        model: "gpt-4-turbo-preview"
+        User's question: <%= @input.arguments.question %>
+
+        Please provide a helpful, concise answer based on the tweets above.
+        If the tweets don't contain relevant information, acknowledge that
+        and provide a general response.
+        """,
+        verbose?: true
       )
-    end
-  end
 end
 ```
 
-### 11. Register the Query Resource
-
-Add the Query resource to the `Twitter.Ai` domain in `lib/twitter/ai.ex`:
+Don't forget to add the `:ask` action to the policy block:
 
 ```elixir
-defmodule Twitter.Ai do
-  use Ash.Domain
-
-  resources do
-    resource Twitter.Ai.Conversation
-    resource Twitter.Ai.Message
-    resource Twitter.Ai.Query  # Add this line
-  end
+policy action([:create, :ask]) do
+  authorize_if always()
 end
 ```
 
-### 12. Test RAG Query
+### 11. Test RAG Query
 
-Generate migrations and test:
-
-```bash
-mix ash.codegen add_ai_query
-mix ash.migrate
-```
-
-In IEx:
+Test the new `:ask` action in IEx:
 
 ```elixir
-# First create some tweets with different topics
-user = # ... get or create a user ...
+# Ask a question and get an AI-generated answer based on relevant tweets
+result = Twitter.Tweets.Tweet
+|> Ash.ActionInput.for_action(:ask, %{question: "What are people saying about Elixir?"})
+|> Ash.run_action!()
 
-Twitter.Tweets.Tweet
-|> Ash.Changeset.for_create(:create, %{text: "Elixir's GenServers make concurrent programming easy"})
-|> Ash.create!(actor: user)
+IO.puts(result)
+# Output: "The tweets provided do not contain any information about Elixir..."
 
-Twitter.Tweets.Tweet
-|> Ash.Changeset.for_create(:create, %{text: "Phoenix LiveView enables real-time features without JavaScript"})
-|> Ash.create!(actor: user)
+# Try with custom limit for more context
+result = Twitter.Tweets.Tweet
+|> Ash.ActionInput.for_action(:ask, %{
+  question: "Tell me about programming",
+  limit: 5
+})
+|> Ash.run_action!()
 
-# Now ask a question
-query = Twitter.Ai.Query
-|> Ash.Changeset.for_create(:ask, %{question: "What are some features of Elixir and Phoenix?"})
-|> Ash.create!()
-
-# See the answer
-IO.puts(query.answer)
-
-# See which tweets were used as context
-IO.inspect(query.context_tweets)
+IO.puts(result)
 ```
 
-### 13. Add Code Interface
+The `:ask` action will:
 
-Add a code interface to make querying easier. In `lib/twitter/ai.ex`:
+1. Use `:semantic_search` to find the most relevant tweets
+2. Build a prompt with those tweets as context
+3. Call the LLM to generate an answer
+4. Return the answer as a string
+
+### 12. Add Code Interface (Optional)
+
+You can add a code interface to make asking questions easier. In
+`lib/twitter/tweets.ex`:
 
 ```elixir
 resources do
-  resource Twitter.Ai.Query do
+  resource Twitter.Tweets.Tweet do
+    # ... existing defines ...
     define :ask, action: :ask, args: [:question]
   end
 end
@@ -512,10 +487,12 @@ end
 Now you can use:
 
 ```elixir
-Twitter.Ai.ask("What are people tweeting about Elixir?")
+Twitter.Tweets.ask("What are people tweeting about Elixir?")
 ```
 
 ## Try on your own
+
+### TODO: use different try on your own ideas to extend this lab!
 
 - Add vectorization to user bios and search users by semantic similarity
 
