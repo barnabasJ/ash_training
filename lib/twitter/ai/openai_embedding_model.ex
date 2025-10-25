@@ -16,13 +16,12 @@ defmodule Twitter.Ai.OpenAiEmbeddingModel do
       raise "OPENAI_API_KEY not configured"
     end
 
-    api_key = 
+    api_key =
       if is_function(api_key, 0) do
         api_key.()
       else
         api_key
       end
-
 
     headers = [
       {"Authorization", "Bearer #{api_key}"},
