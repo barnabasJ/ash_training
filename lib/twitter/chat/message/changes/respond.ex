@@ -40,7 +40,14 @@ defmodule Twitter.Chat.Message.Changes.Respond do
       # i.e tools: [:lookup_weather]
       |> AshAi.setup_ash_ai(
         otp_app: :twitter,
-        tools: [:read_feed, :get_tweet, :create_tweet, :like_tweet, :unlike_tweet],
+        tools: [
+          # :read_fee,
+          # :get_tweet,
+          :create_tweet,
+          :like_tweet,
+          :unlike_tweet,
+          :semantic_search_tweets
+        ],
         actor: context.actor
       )
       |> LLMChain.add_callback(%{
