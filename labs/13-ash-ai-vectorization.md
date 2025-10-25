@@ -1,5 +1,19 @@
 # Lab 13 - Vectorization & RAG with Actions
 
+> **Note**: This lab has been updated to reflect the correct setup process based
+> on official documentation and testing. Key changes:
+>
+> - Added required Postgrex.Types.define setup (Steps 1-3)
+> - Clarified that Ash auto-generates the vector extension migration (no manual
+>   migration needed)
+> - **Changed to `:ash_oban` strategy** instead of `:after_action` for
+>   production-ready async processing
+> - Embedding model uses `AshAi.EmbeddingModel` behavior with `generate/2`
+>   callback
+> - Extension is `AshAi` (not `AshAi.Resource`)
+> - Policy check uses `AshOban.Checks.AshObanInteraction`
+> - Includes Oban trigger configuration with proper module names
+
 ## Relevant Documentation
 
 - [AshAi Vectorization Guide](https://hexdocs.pm/ash_ai/vectorization.html)
@@ -27,76 +41,97 @@ create an AI action that uses relevant tweets as context.
 
 ## Steps
 
-### 1. Enable pgvector Extension
+### 1. Create Postgrex Types Definition File
 
-First, we need to enable PostgreSQL's vector extension. Create a migration:
+**CRITICAL**: Before anything else, we need to define custom Postgrex types to
+support the vector extension. This is required by AshPostgres.Extensions.Vector.
 
-```bash
-mix ecto.gen.migration enable_pgvector
-```
-
-Edit the generated migration file in `priv/repo/migrations/` and add:
+Create `lib/twitter/postgrex_types.ex` (note: this must be at the **file
+level**, NOT inside a module):
 
 ```elixir
-defmodule Twitter.Repo.Migrations.EnablePgvector do
-  use Ecto.Migration
+Postgrex.Types.define(Twitter.PostgrexTypes,
+  [AshPostgres.Extensions.Vector] ++ Ecto.Adapters.Postgres.extensions(),
+  []
+)
+```
 
-  def up do
-    execute("CREATE EXTENSION IF NOT EXISTS vector")
-  end
+### 2. Configure Repo to Use Custom Types
 
-  def down do
-    execute("DROP EXTENSION IF EXISTS vector")
-  end
+Add to `config/config.exs`:
+
+```elixir
+config :twitter, Twitter.Repo,
+  types: Twitter.PostgrexTypes
+```
+
+### 3. Add Vector to Installed Extensions
+
+Update `lib/twitter/repo.ex` to include `"vector"` in the installed extensions:
+
+```elixir
+def installed_extensions do
+  ["citext", "ash-functions", "vector"]
 end
 ```
 
-Run the migration:
+**Note**: Unlike the old approach, you do NOT need to manually create a
+migration for the vector extension. Ash will auto-generate the
+`CREATE EXTENSION IF NOT EXISTS vector` migration when you run `mix ash.codegen`
+in a later step!
 
-```bash
-mix ecto.migrate
-```
-
-### 2. Create an Embedding Model Module
+### 4. Create an Embedding Model Module
 
 We need to configure how text gets converted to embeddings. Create a new file
 `lib/twitter/ai/openai_embedding_model.ex`:
+
+**CRITICAL**: The embedding model must implement the `AshAi.EmbeddingModel`
+behavior with `dimensions/1` and `generate/2` callbacks.
 
 ```elixir
 defmodule Twitter.Ai.OpenAiEmbeddingModel do
   @moduledoc """
   OpenAI embedding model for vectorizing text.
-  Uses the text-embedding-3-small model.
+  Uses the text-embedding-3-small model (1536 dimensions).
   """
+  use AshAi.EmbeddingModel
 
-  def embed(text) when is_binary(text) do
-    embed([text])
-  end
+  @impl true
+  def dimensions(_opts), do: 1536
 
-  def embed(texts) when is_list(texts) do
+  @impl true
+  def generate(texts, _opts) do
     api_key = Application.get_env(:langchain, :openai_key)
 
     if is_nil(api_key) do
       raise "OPENAI_API_KEY not configured"
     end
 
-    payload = %{
-      input: texts,
-      model: "text-embedding-3-small"
-    }
+    # Support both static keys and function-based keys
+    api_key =
+      if is_function(api_key, 0) do
+        api_key.()
+      else
+        api_key
+      end
 
     headers = [
       {"Authorization", "Bearer #{api_key}"},
       {"Content-Type", "application/json"}
     ]
 
+    body = %{
+      "input" => texts,
+      "model" => "text-embedding-3-small"
+    }
+
     case Req.post("https://api.openai.com/v1/embeddings",
-           json: payload,
+           json: body,
            headers: headers
          ) do
-      {:ok, %{status: 200, body: body}} ->
+      {:ok, %{status: 200, body: response_body}} ->
         embeddings =
-          body["data"]
+          response_body["data"]
           |> Enum.sort_by(& &1["index"])
           |> Enum.map(& &1["embedding"])
 
@@ -124,26 +159,35 @@ Then run:
 mix deps.get
 ```
 
-### 3. Add Vectorization to Tweet Resource
+### 5. Add Vectorization to Tweet Resource
 
-Now we'll configure the Tweet resource to automatically vectorize its content.
-Open `lib/twitter/tweets/tweet.ex` and add the vectorization configuration:
+Now we'll configure the Tweet resource to automatically vectorize its content
+using async background jobs.
+
+**IMPORTANT**:
+
+- The extension is `AshAi` (not `AshAi.Resource`)
+- We use `:ash_oban` strategy for async processing (not `:after_action`)
+- Must add `AshOban` extension
+- Must configure Oban trigger with module names
+
+Open `lib/twitter/tweets/tweet.ex` and make these changes:
 
 ```elixir
 defmodule Twitter.Tweets.Tweet do
   use Ash.Resource,
+    otp_app: :twitter,
     domain: Twitter.Tweets,
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer],
     extensions: [
       AshGraphql.Resource,
       AshJsonApi.Resource,
-      AshAi.Resource  # Add this extension
+      AshAi,      # Add this extension (not AshAi.Resource!)
+      AshOban     # Required for async vectorization
     ]
 
-  # ... existing code ...
-
-  # Add this vectorize block
+  # Add this vectorize block BEFORE actions
   vectorize do
     # Vectorize the full content of the tweet
     full_text do
@@ -152,23 +196,66 @@ defmodule Twitter.Tweets.Tweet do
         Tweet: #{tweet.text}
         """
       end
+
+      used_attributes [:text]
     end
 
-    # Store embeddings in this attribute (will be auto-created)
-    attributes(full_text: :full_text_vector)
+    # Store embeddings in this attribute (maps :text to :full_text_vector)
+    attributes text: :full_text_vector
 
     # Use our OpenAI embedding model
     embedding_model Twitter.Ai.OpenAiEmbeddingModel
 
-    # Use after_action strategy for immediate updates
-    strategy :after_action
+    # Use ash_oban strategy for async updates
+    strategy :ash_oban
+  end
+
+  # Configure Oban trigger for vectorization
+  oban do
+    triggers do
+      trigger :ash_ai_update_embeddings do
+        action :ash_ai_update_embeddings
+        queue :tweet_vectorizer
+        worker_read_action :read
+        worker_module_name Twitter.Tweets.Tweet.AshOban.Worker.AshAiUpdateEmbeddings
+        scheduler_module_name Twitter.Tweets.Tweet.AshOban.Scheduler.AshAiUpdateEmbeddings
+      end
+    end
+  end
+
+  # ... existing actions ...
+
+  policies do
+    # Allow AshOban to update embeddings
+    bypass action(:ash_ai_update_embeddings) do
+      authorize_if AshOban.Checks.AshObanInteraction
+    end
+
+    # ... rest of existing policies ...
   end
 
   # ... rest of existing code ...
 end
 ```
 
-### 4. Generate and Run Migrations
+Add the `tweet_vectorizer` queue to your Oban configuration in
+`config/config.exs`:
+
+```elixir
+config :twitter, Oban,
+  engine: Oban.Engines.Basic,
+  notifier: Oban.Notifiers.Postgres,
+  queues: [
+    default: 10,
+    chat_responses: [limit: 10],
+    conversations: [limit: 10],
+    tweet_vectorizer: [limit: 20]  # Add this queue
+  ],
+  repo: Twitter.Repo,
+  plugins: [{Oban.Plugins.Cron, []}]
+```
+
+### 6. Generate and Run Migrations
 
 The vectorization configuration needs to add a vector column to the tweets
 table:
@@ -181,25 +268,38 @@ mix ash.migrate
 This creates a new column `full_text_vector` of type `vector(1536)` (the
 dimension of OpenAI's text-embedding-3-small model).
 
-### 5. Test Vectorization
+### 7. Test Vectorization
 
 Start an IEx session and create a tweet to see vectorization in action:
 
 ```bash
-iex -S mix
+iex -S mix phx.server
 ```
 
+**Note**: Since we're using the `:ash_oban` strategy, vectorization happens
+asynchronously in a background job. The vector won't be immediately available
+after creating the tweet.
+
 ```elixir
+# Get or create a user first
+user = Twitter.Accounts.User |> Ash.Query.first!() |> Ash.read_one!()
+
 # Create a tweet
 tweet = Twitter.Tweets.Tweet
 |> Ash.Changeset.for_create(:create, %{text: "Elixir is an amazing functional programming language"})
 |> Ash.create!(actor: user)
 
-# Check that the vector was created (you'll see a long array of floats)
-tweet.full_text_vector
+# The vector won't be there immediately - it's being processed in the background
+tweet.full_text_vector  # Will be nil at first
+
+# Wait a moment for the Oban job to process, then reload
+
+# Reload the tweet to see the vector
+tweet = Twitter.Tweets.Tweet |> Ash.get!(tweet.id)
+tweet.full_text_vector  # Now you'll see a long array of floats (1536 dimensions)
 ```
 
-### 6. Create a Semantic Search Action
+### 8. Create a Semantic Search Action
 
 Add a read action that can search tweets by semantic similarity. In
 `lib/twitter/tweets/tweet.ex`:
@@ -212,10 +312,10 @@ actions do
     argument :query, :string, allow_nil?: false
 
     prepare fn query, _context ->
-      search_text = Ash.Changeset.get_argument(query, :query)
+      search_text = Ash.Query.get_argument(query, :query)
 
-      # Get embedding for the search query
-      {:ok, [embedding]} = Twitter.Ai.OpenAiEmbeddingModel.embed(search_text)
+      # Get embedding for the search query using generate/2 (not embed/1)
+      {:ok, [embedding]} = Twitter.Ai.OpenAiEmbeddingModel.generate([search_text], [])
 
       # Sort by vector similarity
       query
@@ -255,7 +355,7 @@ mix ash.codegen add_vector_index
 mix ash.migrate
 ```
 
-### 7. Test Semantic Search
+### 9. Test Semantic Search
 
 In IEx, try searching:
 
@@ -269,7 +369,7 @@ Twitter.Tweets.Tweet
 This should return tweets semantically similar to the query, not just keyword
 matches.
 
-### 8. Create a RAG-Enabled Prompt Action
+### 10. Create a RAG-Enabled Prompt Action
 
 Now we'll create a generic action that uses vectorization to retrieve relevant
 tweets and uses them as context for an LLM. Create a new resource for AI
@@ -346,7 +446,7 @@ defmodule Twitter.Ai.Query do
 end
 ```
 
-### 9. Register the Query Resource
+### 11. Register the Query Resource
 
 Add the Query resource to the `Twitter.Ai` domain in `lib/twitter/ai.ex`:
 
@@ -362,7 +462,7 @@ defmodule Twitter.Ai do
 end
 ```
 
-### 10. Test RAG Query
+### 12. Test RAG Query
 
 Generate migrations and test:
 
@@ -397,7 +497,7 @@ IO.puts(query.answer)
 IO.inspect(query.context_tweets)
 ```
 
-### 11. Add Code Interface
+### 13. Add Code Interface
 
 Add a code interface to make querying easier. In `lib/twitter/ai.ex`:
 
@@ -453,13 +553,22 @@ To verify your implementation:
 
 AshAi supports three vectorization strategies:
 
-- **`:after_action`** (used in this lab) - Synchronous, updates happen
-  immediately in the same transaction. Best for: small datasets, real-time
-  requirements
-- **`:ash_oban`** - Asynchronous, updates happen in background jobs. Best for:
-  large datasets, bulk operations
+- **`:ash_oban`** (used in this lab) - Asynchronous, updates happen in
+  background jobs via Oban. Best for: production apps, large datasets, bulk
+  operations. **Recommended for most use cases.**
+- **`:after_action`** - Synchronous, updates happen immediately in the same
+  transaction. Best for: small datasets, real-time requirements. **Warning**:
+  Can make your app slow!
 - **`:manual`** - No automatic updates, you control when to vectorize. Best for:
   custom workflows, optimization
 
-For this training app, `:after_action` is perfect. For production apps with
-millions of records, consider `:ash_oban`.
+**Why we use `:ash_oban` in this lab:**
+
+1. **Production-ready**: Doesn't block the main request
+2. **Resilient**: Oban retries failed jobs automatically
+3. **Observable**: You can monitor vectorization jobs in Oban dashboard
+4. **Scalable**: Can process thousands of tweets without slowing down your app
+
+The `:after_action` strategy would make every tweet creation wait for the OpenAI
+API call to complete before returning, which is not acceptable for production
+use.
