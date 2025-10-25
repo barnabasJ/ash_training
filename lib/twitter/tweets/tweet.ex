@@ -4,7 +4,41 @@ defmodule Twitter.Tweets.Tweet do
     domain: Twitter.Tweets,
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer],
-    extensions: [AshGraphql.Resource, AshJsonApi.Resource]
+    extensions: [AshGraphql.Resource, AshJsonApi.Resource, AshAi, AshOban]
+
+  vectorize do
+    # Vectorize the full content of the tweet
+    full_text do
+      text fn tweet ->
+        """
+        Tweet: #{tweet.text}
+        """
+      end
+      used_attributes [:text]
+    end
+
+    # Store embeddings in this attribute (will be auto-created)
+    attributes text: :full_text_vector
+
+    # Use our OpenAI embedding model
+    embedding_model Twitter.Ai.OpenAiEmbeddingModel
+
+    # Use ash_oban strategy for async updates
+    strategy :ash_oban
+  end
+
+  oban do
+    triggers do
+      trigger :ash_ai_update_embeddings do
+        action :ash_ai_update_embeddings
+        queue :tweet_vectorizer
+        scheduler_cron false
+        worker_read_action :read
+        worker_module_name Twitter.Tweets.Tweet.AshOban.Worker.AshAiUpdateEmbeddings
+        scheduler_module_name Twitter.Tweets.Tweet.AshOban.Scheduler.AshAiUpdateEmbeddings
+      end
+    end
+  end
 
   actions do
     defaults [:read, :destroy]
@@ -29,6 +63,11 @@ defmodule Twitter.Tweets.Tweet do
   end
 
   policies do
+    # Allow AshAi to update embeddings
+    bypass action(:ash_ai_update_embeddings) do
+      authorize_if AshOban.Checks.AshObanInteraction
+    end
+
     policy action_type(:read) do
       authorize_if always()
     end
