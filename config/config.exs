@@ -12,7 +12,12 @@ config :ash_oban, pro?: false
 config :twitter, Oban,
   engine: Oban.Engines.Basic,
   notifier: Oban.Notifiers.Postgres,
-  queues: [default: 10, chat_responses: [limit: 10], conversations: [limit: 10]],
+  queues: [
+    default: 10,
+    chat_responses: [limit: 10],
+    conversations: [limit: 10],
+    tweet_vectorizer: [limit: 20]
+  ],
   repo: Twitter.Repo,
   plugins: [{Oban.Plugins.Cron, []}]
 
@@ -20,6 +25,8 @@ config :twitter,
   ecto_repos: [Twitter.Repo],
   ash_domains: [Twitter.Chat, Twitter.Accounts, Twitter.Tweets],
   generators: [timestamp_type: :utc_datetime]
+
+config :twitter, Twitter.Repo, types: Twitter.PostgrexTypes
 
 # Configures the endpoint
 config :twitter, TwitterWeb.Endpoint,
