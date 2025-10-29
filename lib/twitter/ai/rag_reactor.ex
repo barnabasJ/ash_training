@@ -28,9 +28,6 @@ defmodule Twitter.Ai.RagReactor do
       # Use the reformulated query!
       query: result(:reformulate_query)
     }
-
-    # We can add authorization context
-    actor input(:actor)
   end
 
   # Step 3: Build context string from tweets
