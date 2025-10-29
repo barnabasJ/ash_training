@@ -43,14 +43,45 @@ have the Ash.Reactor extension available. In `mix.exs`, verify you have:
 
 Run `mix deps.get` if needed.
 
-### 2. Create a Prompt Action that Accepts Context
+### 2. Create Prompt Actions for RAG Pipeline
 
-First, let's create a separate action on Tweet that accepts pre-built context.
-This follows the Ash pattern better than manually calling OpenAI.
+We'll create two prompt-backed actions that our Reactor will orchestrate:
 
-Add this action to `lib/twitter/tweets/tweet.ex`:
+1. **Query reformulation** - Converts user question into optimal search query
+2. **Answer generation** - Generates answer using retrieved context
+
+Add these actions to `lib/twitter/tweets/tweet.ex`:
 
 ```elixir
+# Step 1: Reformulate user question into optimal search query
+action :reformulate_query, :string do
+  argument :question, :string do
+    allow_nil? false
+    description "The original user question"
+  end
+
+  run prompt(
+    LangChain.ChatModels.ChatOpenAI.new!(%{model: "gpt-4o-mini"}),
+    prompt: """
+    You are an expert at reformulating questions into effective search queries.
+
+    User's question: <%= @input.arguments.question %>
+
+    Generate a concise search query (2-5 keywords) that will find the most
+    relevant tweets to answer this question. Return ONLY the search query,
+    nothing else.
+
+    Examples:
+    Question: "What are people saying about Elixir's performance?"
+    Query: "Elixir performance speed fast"
+
+    Question: "How does Phoenix compare to Rails?"
+    Query: "Phoenix Rails comparison framework"
+    """
+  )
+end
+
+# Step 2: Generate answer using retrieved context
 action :answer_with_context, :string do
   argument :question, :string do
     allow_nil? false
@@ -79,10 +110,10 @@ action :answer_with_context, :string do
 end
 ```
 
-Update the policy to allow this action:
+Update the policy to allow both actions:
 
 ```elixir
-policy action([:create, :ask, :answer_with_context]) do
+policy action([:create, :ask, :reformulate_query, :answer_with_context]) do
   authorize_if always()
 end
 ```
@@ -95,10 +126,14 @@ Create `lib/twitter/ai/rag_reactor.ex`:
 ```elixir
 defmodule Twitter.Ai.RagReactor do
   @moduledoc """
-  Reactor for RAG workflow using Ash actions for each step.
+  Reactor for multi-LLM RAG workflow using Ash actions.
 
-  This demonstrates how to orchestrate complex workflows while
-  leveraging Ash's built-in functionality instead of manual API calls.
+  Workflow:
+  1. LLM reformulates user question into optimal search query
+  2. Semantic search retrieves relevant tweets using reformulated query
+  3. LLM generates answer using retrieved context
+
+  All LLM calls go through Ash prompt actions, not manual API calls.
   """
 
   use Reactor, extensions: [Ash.Reactor]
@@ -106,17 +141,24 @@ defmodule Twitter.Ai.RagReactor do
   input :question
   input :limit, default: 5
 
-  # Step 1: Fetch relevant tweets using semantic search (Ash read action)
+  # Step 1: Use LLM to reformulate question into optimal search query
+  action :reformulate_query, Twitter.Tweets.Tweet, :reformulate_query do
+    inputs %{
+      question: input(:question)
+    }
+  end
+
+  # Step 2: Fetch relevant tweets using the reformulated query
   read :fetch_context_tweets, Twitter.Tweets.Tweet, :semantic_search do
     inputs %{
-      query: input(:question)
+      query: result(:reformulate_query)  # Use the reformulated query!
     }
 
     # We can add authorization context
     actor input(:actor)
   end
 
-  # Step 2: Build context string from tweets
+  # Step 3: Build context string from tweets
   step :build_context do
     argument :tweets, result(:fetch_context_tweets)
 
@@ -130,7 +172,7 @@ defmodule Twitter.Ai.RagReactor do
     end
   end
 
-  # Step 3: Call the prompt action with context (Ash action)
+  # Step 4: Use LLM to generate answer with context
   action :generate_answer, Twitter.Tweets.Tweet, :answer_with_context do
     inputs %{
       question: input(:question),
@@ -138,18 +180,20 @@ defmodule Twitter.Ai.RagReactor do
     }
   end
 
-  # Step 4: Format the final response
+  # Step 5: Format the final response
   step :format_response do
     argument :answer, result(:generate_answer)
     argument :tweets, result(:fetch_context_tweets)
     argument :question, input(:question)
+    argument :search_query, result(:reformulate_query)
 
-    run fn %{answer: answer, tweets: tweets, question: question}, _context ->
+    run fn args, _context ->
       response = %{
-        question: question,
-        answer: answer,
-        context_tweets: Enum.map(tweets, & &1.text),
-        context_count: length(tweets)
+        question: args.question,
+        search_query: args.search_query,
+        answer: args.answer,
+        context_tweets: Enum.map(args.tweets, & &1.text),
+        context_count: length(args.tweets)
       }
 
       {:ok, response}
@@ -163,11 +207,14 @@ end
 
 Key improvements:
 
-- Uses `read` step for Ash read actions (semantic_search)
-- Uses `action` step for Ash generic actions (answer_with_context)
-- No manual API calls - everything goes through Ash
+- **Multi-LLM workflow**: Query reformulation → Retrieval → Answer generation
+- Uses `action` step for prompt-backed actions (reformulate_query,
+  answer_with_context)
+- Uses `read` step for semantic search
+- No manual API calls - everything goes through Ash actions
+- Shows how one LLM's output (`reformulate_query`) feeds into retrieval step
+- Response includes the reformulated query for transparency
 - Authorization context can be passed via `actor`
-- Cleaner separation of concerns
 
 ### 4. Add a Reactor-Based Action to Tweet
 
@@ -189,7 +236,7 @@ end
 Update the policy:
 
 ```elixir
-policy action([:create, :ask, :answer_with_context, :ask_with_reactor]) do
+policy action([:create, :ask, :reformulate_query, :answer_with_context, :ask_with_reactor]) do
   authorize_if always()
 end
 ```
@@ -260,7 +307,7 @@ simple_result = Twitter.Tweets.Tweet
 IO.puts("Simple action result:")
 IO.puts(simple_result)
 
-# Now try the Reactor-based approach
+# Now try the Reactor-based approach with query reformulation
 reactor_result = Twitter.Tweets.Tweet
 |> Ash.ActionInput.for_action(:ask_with_reactor, %{
   question: "What are people saying about Elixir?",
@@ -270,7 +317,19 @@ reactor_result = Twitter.Tweets.Tweet
 
 IO.puts("\nReactor-based result:")
 IO.inspect(reactor_result)
+
+# Output will include the reformulated search query:
+# %{
+#   question: "What are people saying about Elixir?",
+#   search_query: "Elixir programming language features benefits",
+#   answer: "Based on the tweets...",
+#   context_tweets: [...],
+#   context_count: 5
+# }
 ```
+
+Notice how the Reactor result includes `:search_query` showing how the LLM
+reformulated the question for better semantic search results.
 
 ### 8. Add Parallel Processing (Optional)
 
