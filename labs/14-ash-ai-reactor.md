@@ -139,7 +139,7 @@ defmodule Twitter.Ai.RagReactor do
   use Reactor, extensions: [Ash.Reactor]
 
   input :question
-  input :limit, default: 5
+  input :limit
 
   # Step 1: Use LLM to reformulate question into optimal search query
   action :reformulate_query, Twitter.Tweets.Tweet, :reformulate_query do
@@ -153,9 +153,6 @@ defmodule Twitter.Ai.RagReactor do
     inputs %{
       query: result(:reformulate_query)  # Use the reformulated query!
     }
-
-    # We can add authorization context
-    actor input(:actor)
   end
 
   # Step 3: Build context string from tweets
@@ -214,7 +211,6 @@ Key improvements:
 - No manual API calls - everything goes through Ash actions
 - Shows how one LLM's output (`reformulate_query`) feeds into retrieval step
 - Response includes the reformulated query for transparency
-- Authorization context can be passed via `actor`
 
 ### 4. Add a Reactor-Based Action to Tweet
 
@@ -248,53 +244,29 @@ Reactor module to `run` and Ash:
 - Passes the action context into the Reactor's context
 - Handles the Reactor execution lifecycle
 
-### 5. Add Compensating Actions
+### 5. Add Code Interface for the New Action
 
-One of Reactor's powerful features is automatic rollback. Let's add compensation
-to the LLM action step in case something fails downstream.
-
-Update the `:generate_answer` action step in `lib/twitter/ai/rag_reactor.ex`:
+To make the action easier to call, add it to the code interface in
+`lib/twitter/tweets.ex`:
 
 ```elixir
-# Step 3: Call the prompt action with context and compensation
-action :generate_answer, Twitter.Tweets.Tweet, :answer_with_context do
-  inputs %{
-    question: input(:question),
-    context: result(:build_context)
-  }
-
-  # If something fails after this, log the rollback
-  compensate fn _value, _context ->
-    require Logger
-    Logger.info("Compensating LLM call - workflow rolled back")
-    :ok
+resources do
+  resource Twitter.Tweets.Tweet do
+    define :feed
+    define :get_tweet, action: :read, get_by: [:id]
+    define :delete_tweet, action: :destroy
+    define :ask_tweet_question, action: :ask, args: [:question]
+    define :ask_tweet_reactor_question, action: :ask_with_reactor, args: [:question]  # Add this line
   end
+
+  # ... rest of resources
 end
 ```
 
-### 6. Add Error Handling and Retry Logic
+Now you can call the action directly:
+`Twitter.Tweets.ask_tweet_reactor_question("What are people saying about Elixir?")`
 
-Reactor supports automatic retries. Let's add retry logic to the action step:
-
-```elixir
-action :generate_answer, Twitter.Tweets.Tweet, :answer_with_context do
-  inputs %{
-    question: input(:question),
-    context: result(:build_context)
-  }
-
-  # Retry up to 3 times on failure
-  max_retries 3
-
-  compensate fn _value, _context ->
-    require Logger
-    Logger.warn("LLM call failed after retries - compensating")
-    :ok
-  end
-end
-```
-
-### 7. Test the Reactor-Based RAG
+### 6. Test the Reactor-Based RAG
 
 Test the new Reactor-based action in IEx:
 
