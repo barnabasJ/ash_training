@@ -190,11 +190,3 @@ exposes the `read_feed` tool which retrieves the feed of tweets.
 ## Try on your own
 
 Now that you understand the flow, add more tools to the MCP server:
-
-1. **Define additional tools** in the `tools` block in `lib/twitter/tweets.ex`:
-   - Add a `:read_tweet` tool that uses the `:read` action
-
-2. **Expose these tools** via the production MCP server by adding them to the
-   `tools:` list in the router
-
-3. **Test** that the MCP server now exposes both tools by connecting to it

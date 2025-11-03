@@ -41,8 +41,8 @@ defmodule Twitter.Chat.Message.Changes.Respond do
       |> AshAi.setup_ash_ai(
         otp_app: :twitter,
         tools: [
-          # :read_fee,
-          # :get_tweet,
+          :read_feed,
+          :get_tweet,
           :create_tweet,
           :like_tweet,
           :unlike_tweet,

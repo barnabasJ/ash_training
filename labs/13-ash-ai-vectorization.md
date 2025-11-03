@@ -1,19 +1,5 @@
 # Lab 13 - Vectorization & RAG with Actions
 
-> **Note**: This lab has been updated to reflect the correct setup process based
-> on official documentation and testing. Key changes:
->
-> - Added required Postgrex.Types.define setup (Steps 1-3)
-> - Clarified that Ash auto-generates the vector extension migration (no manual
->   migration needed)
-> - **Changed to `:ash_oban` strategy** instead of `:after_action` for
->   production-ready async processing
-> - Embedding model uses `AshAi.EmbeddingModel` behavior with `generate/2`
->   callback
-> - Extension is `AshAi` (not `AshAi.Resource`)
-> - Policy check uses `AshOban.Checks.AshObanInteraction`
-> - Includes Oban trigger configuration with proper module names
-
 ## Relevant Documentation
 
 - [AshAi Vectorization Guide](https://hexdocs.pm/ash_ai/vectorization.html)
@@ -492,24 +478,7 @@ Twitter.Tweets.ask("What are people tweeting about Elixir?")
 
 ## Try on your own
 
-### TODO: use different try on your own ideas to extend this lab!
-
 - Add vectorization to user bios and search users by semantic similarity
-
-- Implement multiple vectorization strategies (`:after_action` vs `:ash_oban`)
-  and compare performance
-
-- Create a `regenerate_embeddings` action to re-vectorize all existing tweets
-
-- Add more sophisticated context retrieval (e.g., filter by date, user, or like
-  count)
-
 - Combine vector search with traditional filters (e.g., semantic search within
   tweets from the last week)
-
-- Experiment with different embedding models (e.g., `text-embedding-3-large` for
-  higher quality)
-
-- Add a `relevance_score` to show how similar each context tweet is to the query
-
 - Implement a chat interface that uses RAG to answer questions about tweets
