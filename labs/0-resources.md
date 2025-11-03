@@ -11,7 +11,8 @@
 
 ## Context
 
-We have already created a domain module for you, called `Twitter.Tweets` in `lib/twitter/tweets`.
+We have already created a domain module for you, called `Twitter.Tweets` in
+`lib/twitter/tweets`.
 
 ## Steps
 
@@ -30,7 +31,8 @@ This command
 - adds a default read & destroy action
 - adds the resource to the domain module `Twitter.Tweets`
 
-2. Run `iex -S mix`, and use functions from `Ash.Resource.Info` to see that we've defined the resource properly. (ignore the warnings presented in iex)
+2. Run `iex -S mix`, and use functions from `Ash.Resource.Info` to see that
+   we've defined the resource properly. (ignore the warnings presented in iex)
 
 ```elixir
 iex> Ash.Resource.Info.attributes(Twitter.Tweets.Tweet)
@@ -42,7 +44,8 @@ iex> Ash.Resource.Info.actions(Twitter.Tweets.Tweet)
 # [%Ash.Resource.Read{}]
 ```
 
-3. Add `Twitter.Tweets.Tweet` to our domain's (`Twitter.Tweets`) resource list. Ignore the extra content in the domain for module for now.
+3. Add `Twitter.Tweets.Tweet` to our domain's (`Twitter.Tweets`) resource list.
+   Ignore the extra content in the domain for module for now.
 
 4. Use functions from `Ash.Domain.Info`
 
@@ -54,7 +57,7 @@ iex> Ash.Domain.Info.resources(Twitter.Tweets)
 5. Run the following to add the `AshPostgres` extension to the resource:
 
 ```bash
-mix ash.patch.extend Twitter.Tweets.Tweet postgres
+mix ash.extend Twitter.Tweets.Tweet postgres
 ```
 
 This command
@@ -75,6 +78,8 @@ iex> AshPostgres.DataLayer.Info.repo(Twitter.Tweets.Tweet)
 
 ## Try on your own
 
-- Add a `:text` attribute to the `Tweet` resource, and check the `attributes` list with `Ash.Resource.Info` again.
+- Add a `:text` attribute to the `Tweet` resource, and check the `attributes`
+  list with `Ash.Resource.Info` again.
 
-- Change the table name to something else, and check the table name with `AshPostgres.DataLayer.Info` again.
+- Change the table name to something else, and check the table name with
+  `AshPostgres.DataLayer.Info` again.
