@@ -158,13 +158,11 @@ defmodule TwitterWeb.TweetLive.Index do
     {:noreply, refetch_tweet(socket, tweet_id)}
   end
 
-  defp refetch_tweet(socket, _id) do
-    # TODO: investigate why stream_insert with a single record doesn't work here
-    # Ash.get! seems to have a bug 
-    socket
-    |> stream(
+  defp refetch_tweet(socket, id) do
+    stream_insert(
+      socket,
       :tweets,
-      Twitter.Tweets.feed!(actor: socket.assigns.current_user, load: @tweet_loads)
+      Twitter.Tweets.get_tweet!(id, actor: socket.assigns.current_user, load: @tweet_loads)
     )
   end
 end
