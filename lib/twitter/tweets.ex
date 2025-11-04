@@ -3,7 +3,7 @@ defmodule Twitter.Tweets do
     extensions: [AshJsonApi.Domain, AshAdmin.Domain]
 
   admin do
-    show? true
+    show?(true)
   end
 
   json_api do
