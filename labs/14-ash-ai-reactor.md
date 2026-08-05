@@ -38,10 +38,10 @@ have the Ash.Reactor extension available. In `mix.exs`, verify you have:
 
 ```elixir
 {:ash, "~> 3.0"}
-{:reactor, "~> 0.9"}  # Usually included via ash
 ```
 
-Run `mix deps.get` if needed.
+Reactor is included as a dependency of Ash — you can confirm with
+`mix deps | grep reactor`. No changes should be needed.
 
 ### 2. Create Prompt Actions for RAG Pipeline
 
@@ -60,8 +60,7 @@ action :reformulate_query, :string do
     description "The original user question"
   end
 
-  run prompt(
-    LangChain.ChatModels.ChatOpenAI.new!(%{model: "gpt-4o-mini"}),
+  run prompt("openai:gpt-4o-mini",
     prompt: """
     You are an expert at reformulating questions into effective search queries.
 
@@ -93,8 +92,7 @@ action :answer_with_context, :string do
     description "Pre-built context from semantic search"
   end
 
-  run prompt(
-    LangChain.ChatModels.ChatOpenAI.new!(%{model: "gpt-4o-mini"}),
+  run prompt("openai:gpt-4o-mini",
     prompt: """
     You are a helpful assistant answering questions about tweets.
 
@@ -255,7 +253,7 @@ resources do
     define :feed
     define :get_tweet, action: :read, get_by: [:id]
     define :delete_tweet, action: :destroy
-    define :ask_tweet_question, action: :ask, args: [:question]
+    define :ask, action: :ask, args: [:question]
     define :ask_tweet_reactor_question, action: :ask_with_reactor, args: [:question]  # Add this line
   end
 

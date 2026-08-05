@@ -16,6 +16,7 @@ defmodule Twitter.Tweets do
       define :get_tweet, action: :read, get_by: [:id]
       define :delete_tweet, action: :destroy
       define :ask, action: :ask, args: [:question]
+      define :ask_tweet_reactor_question, action: :ask_with_reactor, args: [:question]
     end
 
     resource Twitter.Tweets.Like do
