@@ -36,6 +36,11 @@ defmodule Twitter.Tweets.Tweet do
     calculate :liked_by_me, :boolean, expr(exists(likes, user_id == ^actor(:id)))
   end
 
+  aggregates do
+    count :like_count, :likes
+    first :user_email, :user, :email
+  end
+
   postgres do
     table "tweets"
     repo Twitter.Repo
