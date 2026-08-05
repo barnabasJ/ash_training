@@ -40,14 +40,15 @@ resource Twitter.Tweets.Tweet do
 end
 ```
 
-4. Now lets use that in our `apply_action` function for `:edit` in `index.ex`
+4. Now lets use that in our `apply_action` function for `:edit` in `lib/twitter_web/live/tweet_live/form.ex`
 
 ```elixir
 defp apply_action(socket, :edit, %{"id" => id}) do
   socket
   |> assign(:page_title, "Edit Tweet")
-  |> assign(:tweet,
-    Twitter.Tweets.get_tweet!(id, load: @tweet_loads, actor: socket.assigns.current_user)
+  |> assign(
+    :tweet,
+    Twitter.Tweets.get_tweet!(id, actor: socket.assigns.current_user)
   )
 end
 ```

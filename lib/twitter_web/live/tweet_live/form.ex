@@ -31,7 +31,7 @@ defmodule TwitterWeb.TweetLive.Form do
     |> assign(:page_title, "Edit Tweet")
     |> assign(
       :tweet,
-      Ash.get!(Twitter.Tweets.Tweet, id, actor: socket.assigns.current_user)
+      Twitter.Tweets.get_tweet!(id, actor: socket.assigns.current_user)
     )
   end
 
