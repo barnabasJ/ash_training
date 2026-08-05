@@ -1,6 +1,6 @@
 defmodule Twitter.Tweets do
   use Ash.Domain,
-    extensions: [AshGraphql.Domain, AshJsonApi.Domain, AshAdmin.Domain]
+    extensions: [AshGraphql.Domain, AshJsonApi.Domain, AshAdmin.Domain, AshAi]
 
   admin do
     show? true
@@ -20,6 +20,12 @@ defmodule Twitter.Tweets do
     resource Twitter.Tweets.Like do
       define :like, args: [:tweet_id]
       define :unlike, args: [:tweet_id], require_reference?: false
+    end
+  end
+
+  tools do
+    tool :read_feed, Twitter.Tweets.Tweet, :feed do
+      description "Retrieve the feed of tweets, sorted by most recent first"
     end
   end
 end
