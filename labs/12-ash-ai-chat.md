@@ -33,20 +33,15 @@ Before starting, you'll need:
 
 ### 1. Configure OpenAI API Key
 
-Add your OpenAI API key to your configuration. In `config/dev.exs` and
-`config/runtime.exs`, add:
+AshAi's chat feature talks to LLM providers via
+[ReqLLM](https://hexdocs.pm/req_llm). The chat generator (next step) adds the
+required configuration to `config/runtime.exs` for you:
 
 ```elixir
-# In config/dev.exs (for development)
-config :langchain, :openai_key, System.get_env("OPENAI_API_KEY")
-
-# In config/runtime.exs (for production)
-if config_env() == :prod do
-  config :langchain, :openai_key, System.get_env("OPENAI_API_KEY")
-end
+config :req_llm, openai_api_key: System.get_env("OPENAI_API_KEY")
 ```
 
-Set the environment variable in your terminal:
+All you need to do is set the environment variable in your terminal:
 
 ```bash
 export OPENAI_API_KEY="your-api-key-here"

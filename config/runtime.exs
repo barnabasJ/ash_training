@@ -1,4 +1,5 @@
 import Config
+config :req_llm, openai_api_key: System.get_env("OPENAI_API_KEY")
 
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
@@ -114,7 +115,4 @@ if config_env() == :prod do
   #     config :swoosh, :api_client, Swoosh.ApiClient.Hackney
   #
   # See https://hexdocs.pm/swoosh/Swoosh.html#module-installation for details.
-
-  # Configure OpenAI API key for AshAi in production
-  config :langchain, :openai_key, System.get_env("OPENAI_API_KEY")
 end
