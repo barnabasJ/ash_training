@@ -1,6 +1,6 @@
 defmodule Twitter.Tweets do
   use Ash.Domain,
-    extensions: [AshJsonApi.Domain, AshAdmin.Domain]
+    extensions: [AshGraphql.Domain, AshJsonApi.Domain, AshAdmin.Domain]
 
   admin do
     show? true
