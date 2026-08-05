@@ -80,84 +80,26 @@ migration for the vector extension. Ash will auto-generate the
 `CREATE EXTENSION IF NOT EXISTS vector` migration when you run `mix ash.codegen`
 in a later step!
 
-### 4. Create an Embedding Model Module
+### 4. Pick an Embedding Model
 
-We need to configure how text gets converted to embeddings. Create a new file
-`lib/twitter/ai/openai_embedding_model.ex`:
-
-**CRITICAL**: The embedding model must implement the `AshAi.EmbeddingModel`
-behavior with `dimensions/1` and `generate/2` callbacks.
-
-```elixir
-defmodule Twitter.Ai.OpenAiEmbeddingModel do
-  @moduledoc """
-  OpenAI embedding model for vectorizing text.
-  Uses the text-embedding-3-small model (1536 dimensions).
-  """
-  use AshAi.EmbeddingModel
-
-  @impl true
-  def dimensions(_opts), do: 1536
-
-  @impl true
-  def generate(texts, _opts) do
-    api_key = Application.get_env(:langchain, :openai_key)
-
-    if is_nil(api_key) do
-      raise "OPENAI_API_KEY not configured"
-    end
-
-    # Support both static keys and function-based keys
-    api_key =
-      if is_function(api_key, 0) do
-        api_key.()
-      else
-        api_key
-      end
-
-    headers = [
-      {"Authorization", "Bearer #{api_key}"},
-      {"Content-Type", "application/json"}
-    ]
-
-    body = %{
-      "input" => texts,
-      "model" => "text-embedding-3-small"
-    }
-
-    case Req.post("https://api.openai.com/v1/embeddings",
-           json: body,
-           headers: headers
-         ) do
-      {:ok, %{status: 200, body: response_body}} ->
-        embeddings =
-          response_body["data"]
-          |> Enum.sort_by(& &1["index"])
-          |> Enum.map(& &1["embedding"])
-
-        {:ok, embeddings}
-
-      {:ok, response} ->
-        {:error, "OpenAI API error: #{inspect(response)}"}
-
-      {:error, error} ->
-        {:error, "Request failed: #{inspect(error)}"}
-    end
-  end
-end
-```
-
-Add `req` to your dependencies in `mix.exs`:
+We need to configure how text gets converted to embeddings. AshAi ships a
+ReqLLM-backed embedding model (`AshAi.EmbeddingModels.ReqLLM`), so we don't
+need to write any HTTP code ourselves — we just reference it with the model
+name and its dimensions:
 
 ```elixir
-{:req, "~> 0.4"}
+embedding_model {AshAi.EmbeddingModels.ReqLLM,
+  model: "openai:text-embedding-3-small",
+  dimensions: 1536
+}
 ```
 
-Then run:
+It uses the same `OPENAI_API_KEY` configuration (via `config :req_llm`) that
+the chat feature already set up in Lab 12.
 
-```bash
-mix deps.get
-```
+If you ever need a custom provider, you can implement the
+`AshAi.EmbeddingModel` behaviour yourself (callbacks: `dimensions/1` and
+`generate/2`), but for OpenAI the built-in model is all you need.
 
 ### 5. Add Vectorization to Tweet Resource
 
@@ -203,8 +145,9 @@ defmodule Twitter.Tweets.Tweet do
     # Store embeddings in this attribute (maps :text to :full_text_vector)
     attributes text: :full_text_vector
 
-    # Use our OpenAI embedding model
-    embedding_model Twitter.Ai.OpenAiEmbeddingModel
+    # Use the builtin ReqLLM-backed OpenAI embedding model
+    embedding_model {AshAi.EmbeddingModels.ReqLLM,
+                     model: "openai:text-embedding-3-small", dimensions: 1536}
 
     # Use ash_oban strategy for async updates
     strategy :ash_oban
@@ -314,8 +257,12 @@ actions do
     prepare fn query, _context ->
       search_text = Ash.Query.get_argument(query, :query)
 
-      # Get embedding for the search query using generate/2 (not embed/1)
-      case Twitter.Ai.OpenAiEmbeddingModel.generate([search_text], []) do
+      # Get an embedding for the search query with the same model
+      # we use for vectorizing tweets
+      case AshAi.EmbeddingModels.ReqLLM.generate([search_text],
+             model: "openai:text-embedding-3-small",
+             dimensions: 1536
+           ) do
         {:ok, [search_vector]} ->
           query
           |> Ash.Query.sort(
@@ -332,7 +279,9 @@ actions do
 end
 ```
 
-Add the vector distance function support to the postgres config:
+Add a vector index for faster similarity searches to the postgres config. Note
+that we have to spell out the operator class (`vector_cosine_ops`) as part of
+the field, since `hnsw` has no default operator class:
 
 ```elixir
 postgres do
@@ -340,10 +289,9 @@ postgres do
   table "tweets"
 
   custom_indexes do
-    # Add a vector index for faster similarity searches
-    index [:full_text_vector],
+    index ["full_text_vector vector_cosine_ops"],
+      name: "tweets_full_text_vector_index",
       using: "hnsw",
-      with: "m = 16, ef_construction = 64",
       concurrently: false
   end
 end
@@ -411,8 +359,7 @@ action :ask, :string do
     Ash.ActionInput.set_argument(input, :context, Enum.join(context_tweets, "\n"))
   end
 
-  run prompt(
-        LangChain.ChatModels.ChatOpenAI.new!(%{model: "gpt-4o-mini"}),
+  run prompt("openai:gpt-4o-mini",
         prompt: """
         You are a helpful assistant answering questions about tweets.
 
@@ -425,11 +372,13 @@ action :ask, :string do
         Please provide a helpful, concise answer based on the tweets above.
         If the tweets don't contain relevant information, acknowledge that
         and provide a general response.
-        """,
-        verbose?: true
+        """
       )
 end
 ```
+
+Note: the first argument of `prompt/2` is a ReqLLM model string in the
+`"provider:model-name"` format — the same kind of string the chat feature uses.
 
 Don't forget to add the `:ask` action to the policy block:
 

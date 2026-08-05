@@ -15,6 +15,7 @@ defmodule Twitter.Tweets do
       define :feed
       define :get_tweet, action: :read, get_by: [:id]
       define :delete_tweet, action: :destroy
+      define :ask, action: :ask, args: [:question]
     end
 
     resource Twitter.Tweets.Like do
@@ -30,6 +31,10 @@ defmodule Twitter.Tweets do
 
     tool :read_tweet, Twitter.Tweets.Tweet, :read do
       description "Retrieve a list of tweets, also supports filtering, sorting, and more"
+    end
+
+    tool :semantic_search_tweets, Twitter.Tweets.Tweet, :semantic_search do
+      description "Perform a semantic search over tweets based on a query string"
     end
 
     tool :create_tweet, Twitter.Tweets.Tweet, :create do
